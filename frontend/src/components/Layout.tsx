@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   UploadCloud,
   Clapperboard,
+  Store,
   Wallet,
   Shield,
   LogOut,
@@ -17,6 +18,7 @@ export default function Layout() {
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/marketplace', label: 'Marketplace', icon: Store },
     { to: '/upload', label: 'Upload', icon: UploadCloud },
     { to: '/videos', label: 'My videos', icon: Clapperboard },
     { to: '/wallet', label: 'Wallet', icon: Wallet },

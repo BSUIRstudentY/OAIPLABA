@@ -3,26 +3,29 @@ import { Link, useParams } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
-import { ArrowLeft, Check, X, Loader2, Download, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Check, X, Loader2, Download, TrendingUp, Tag, Store } from 'lucide-react';
 import { api, apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import type { OfferBreakdown, Video } from '../types';
+import type { AiAnalysis, OfferBreakdown, Video } from '../types';
 import { formatDate, formatDuration, formatMoney, formatNumber } from '../lib/format';
 import StatusBadge from '../components/StatusBadge';
+import AiAnalysisCard from '../components/AiAnalysisCard';
 
 export default function VideoDetail() {
   const { id } = useParams<{ id: string }>();
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [video, setVideo] = useState<Video | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [listPrice, setListPrice] = useState('');
 
   async function load() {
     try {
       const { data } = await api.get<Video>(`/videos/${id}`);
       setVideo(data);
+      if (data.aiFairPrice != null && !listPrice) setListPrice(String(data.aiFairPrice));
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -35,10 +38,21 @@ export default function VideoDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const isOwner = !!video && !!user && video.ownerId === user.id;
+
   const breakdown = useMemo<OfferBreakdown | null>(() => {
     if (!video?.offerBreakdown) return null;
     try {
       return JSON.parse(video.offerBreakdown) as OfferBreakdown;
+    } catch {
+      return null;
+    }
+  }, [video]);
+
+  const aiAnalysis = useMemo<AiAnalysis | null>(() => {
+    if (!video?.aiAnalysis) return null;
+    try {
+      return JSON.parse(video.aiAnalysis) as AiAnalysis;
     } catch {
       return null;
     }
@@ -64,8 +78,38 @@ export default function VideoDetail() {
         await refreshUser();
         setNotice(`Offer accepted! ${formatMoney(data.offerPrice)} was credited to your wallet.`);
       } else {
-        setNotice('Offer rejected.');
+        setNotice('Platform offer rejected.');
       }
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function listForSale() {
+    if (!video) return;
+    setActing(true);
+    setError(null);
+    try {
+      const { data } = await api.post<Video>(`/videos/${video.id}/list`, { price: Number(listPrice) });
+      setVideo(data);
+      setNotice(`Listed for sale at ${formatMoney(data.salePrice ?? 0)}. It's now on the marketplace.`);
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function unlist() {
+    if (!video) return;
+    setActing(true);
+    setError(null);
+    try {
+      const { data } = await api.post<Video>(`/videos/${video.id}/unlist`);
+      setVideo(data);
+      setNotice('Removed from the marketplace.');
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -101,28 +145,29 @@ export default function VideoDetail() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-bold">{video.title}</h1>
             <StatusBadge status={video.status} />
+            {video.listedForSale && (
+              <span className="badge bg-primary/20 text-primary">Listed {formatMoney(video.salePrice ?? 0)}</span>
+            )}
           </div>
           <p className="mt-1 capitalize text-muted-foreground">
-            {video.category} · {formatDuration(video.durationSeconds)} · uploaded {formatDate(video.createdAt)}
+            {video.category} · {formatDuration(video.durationSeconds)} · by {video.ownerDisplayName} · {formatDate(video.createdAt)}
           </p>
         </div>
-        <button className="btn-ghost" onClick={download}>
-          <Download size={16} /> Download
-        </button>
+        {isOwner && (
+          <button className="btn-ghost" onClick={download}>
+            <Download size={16} /> Download
+          </button>
+        )}
       </div>
 
       {notice && (
-        <div role="status" className="rounded-xl bg-success/15 px-4 py-3 text-sm text-success">
-          {notice}
-        </div>
+        <div role="status" className="rounded-xl bg-success/15 px-4 py-3 text-sm text-success">{notice}</div>
       )}
       {error && (
-        <div role="alert" className="rounded-xl bg-destructive/15 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
+        <div role="alert" className="rounded-xl bg-destructive/15 px-4 py-3 text-sm text-destructive">{error}</div>
       )}
 
       {video.description && (
@@ -132,11 +177,60 @@ export default function VideoDetail() {
         </div>
       )}
 
+      {/* AI valuation */}
+      {aiAnalysis && <AiAnalysisCard analysis={aiAnalysis} />}
+
+      {/* Sell on the marketplace (owner only) */}
+      {isOwner && video.status !== 'SOLD' && (
+        <div className="card p-6">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Store size={18} className="text-primary" />
+            <span className="text-sm font-semibold uppercase tracking-wide">Sell on the marketplace</span>
+          </div>
+          {video.listedForSale ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Listed for <span className="font-mono font-semibold text-primary">{formatMoney(video.salePrice ?? 0)}</span>.
+                Other users can buy it now.
+              </p>
+              <button className="btn-ghost" onClick={unlist} disabled={acting}>
+                {acting ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />} Remove listing
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[180px]">
+                <label className="label" htmlFor="listPrice">Your price (USD)</label>
+                <input
+                  id="listPrice"
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  className="input"
+                  value={listPrice}
+                  onChange={(e) => setListPrice(e.target.value)}
+                  placeholder="e.g. 50.00"
+                />
+                {video.aiFairPrice != null && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    AI suggests around {formatMoney(video.aiFairPrice)} as a fair price.
+                  </p>
+                )}
+              </div>
+              <button className="btn-primary" onClick={listForSale} disabled={acting || !listPrice}>
+                {acting ? <Loader2 size={16} className="animate-spin" /> : <Tag size={16} />} List for sale
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Platform buyout offer */}
       <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
         <div className="card p-6">
           <div className="flex items-center gap-2 text-muted-foreground">
             <TrendingUp size={18} className="text-primary" />
-            <span className="text-sm font-semibold uppercase tracking-wide">Buyout offer</span>
+            <span className="text-sm font-semibold uppercase tracking-wide">Platform buyout offer</span>
           </div>
           <div className="mt-3 font-mono text-5xl font-bold text-primary">
             {formatMoney(video.offerPrice)}
@@ -145,7 +239,7 @@ export default function VideoDetail() {
             Estimated {formatNumber(video.estimatedMonthlyViews)} monthly views
           </p>
 
-          {video.status === 'OFFERED' ? (
+          {isOwner && video.status === 'OFFERED' ? (
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button className="btn-primary flex-1" onClick={() => act('accept-offer')} disabled={acting}>
                 {acting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
@@ -158,8 +252,10 @@ export default function VideoDetail() {
           ) : (
             <div className="mt-6 rounded-xl bg-white/5 px-4 py-3 text-sm text-muted-foreground">
               {video.status === 'SOLD'
-                ? `Sold on ${formatDate(video.resolvedAt)} — payout credited to your wallet.`
-                : `Offer rejected on ${formatDate(video.resolvedAt)}.`}
+                ? `Sold to the platform on ${formatDate(video.resolvedAt)} — payout credited.`
+                : video.status === 'REJECTED'
+                ? 'Platform buyout offer is closed.'
+                : 'Platform buyout available to the owner.'}
             </div>
           )}
         </div>
@@ -167,7 +263,7 @@ export default function VideoDetail() {
         {breakdown && (
           <div className="card p-6">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              How we calculated it
+              How the platform offer is calculated
             </h2>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">

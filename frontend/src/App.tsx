@@ -9,6 +9,7 @@ import Upload from './pages/Upload';
 import MyVideos from './pages/MyVideos';
 import VideoDetail from './pages/VideoDetail';
 import WalletPage from './pages/WalletPage';
+import Marketplace from './pages/Marketplace';
 import Admin from './pages/Admin';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/upload" element={<Upload />} />
         <Route path="/videos" element={<MyVideos />} />
         <Route path="/videos/:id" element={<VideoDetail />} />

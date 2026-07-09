@@ -46,9 +46,35 @@ export interface Video {
   estimatedMonthlyViews: number;
   offerPrice: number;
   offerBreakdown: string | null;
+  ownerId: string;
   ownerDisplayName: string;
+  listedForSale: boolean;
+  salePrice: number | null;
+  aiFairPrice: number | null;
+  aiAnalysis: string | null;
   createdAt: string;
   resolvedAt: string | null;
+}
+
+export interface AiAnalysis {
+  fairPrice: number;
+  currency: string;
+  confidence: number;
+  summary: string;
+  factors: { name: string; impact: string; detail: string }[];
+  keyMoments: { timeSeconds: number; timecode: string; label: string }[];
+  contextTags: string[];
+  technical: {
+    width: number;
+    height: number;
+    resolutionLabel: string;
+    fps: number;
+    bitrateKbps: number;
+    hasAudio: boolean;
+    sceneChanges: number;
+    durationSeconds: number;
+  };
+  engine: string;
 }
 
 export interface WalletTransaction {
