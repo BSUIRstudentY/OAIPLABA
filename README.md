@@ -57,17 +57,30 @@ A default admin account is seeded: **admin@vidvault.io** / **admin12345**.
 
 ## How the buyout price is calculated
 
-The offer is fully transparent and configurable by admins (Admin panel → Pricing model):
+Pricing is grounded in **realistic YouTube earnings: about $0.01 per 1000 views**
+(the default CPM, admin-configurable). Short or empty clips therefore earn
+almost nothing, while long, edited, watchable videos with a real audience are
+worth buying.
+
+**Platform buyout offer** (transparent, admin-configurable):
 
 ```
-estimated monthly views = base views x category multiplier x duration factor
-monthly revenue         = views x CPM / 1000 x watch-time factor
+estimated monthly views = base views x category multiplier x duration gate
+monthly revenue         = views x CPM($0.01) / 1000 x watch-time factor
 projected revenue       = monthly revenue x projection months
 gross offer             = projected revenue x buyout share
 offer price             = gross offer x (1 - platform fee)
 ```
 
-Authors can also provide their own expected monthly views to override the estimate.
+The **duration gate** drives seconds-long clips close to zero views. Authors can
+also provide their own expected monthly views to override the estimate.
+
+**AI valuation** additionally analyses the actual file and computes a
+`content score` (0–1) = duration gate x (editing/montage + audio + resolution).
+The fair price = projected revenue x up to 50% x content score, plus a verdict
+("Not worth buying" / "Low value" / "Worth buying"). A short, single-shot clip
+scores ~0 → **$0.00 / Not worth buying**; a long, edited, HD video with audio and
+an audience scores high → a price grounded in its realistic earnings.
 
 ## Project layout
 
