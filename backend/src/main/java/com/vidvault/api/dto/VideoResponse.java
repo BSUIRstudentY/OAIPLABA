@@ -18,7 +18,12 @@ public record VideoResponse(
         long estimatedMonthlyViews,
         BigDecimal offerPrice,
         String offerBreakdown,
+        UUID ownerId,
         String ownerDisplayName,
+        boolean listedForSale,
+        BigDecimal salePrice,
+        BigDecimal aiFairPrice,
+        String aiAnalysis,
         Instant createdAt,
         Instant resolvedAt) {
 
@@ -35,7 +40,12 @@ public record VideoResponse(
                 v.getEstimatedMonthlyViews(),
                 v.getOfferPrice(),
                 v.getOfferBreakdown(),
+                v.getOwner().getId(),
                 v.getOwner().getDisplayName(),
+                v.isListedForSale(),
+                v.getSalePrice(),
+                v.getAiFairPrice(),
+                v.getAiAnalysis(),
                 v.getCreatedAt(),
                 v.getResolvedAt());
     }

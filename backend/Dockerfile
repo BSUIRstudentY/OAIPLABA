@@ -12,6 +12,10 @@ RUN mvn -q -B -DskipTests package
 # ---- Runtime stage ----
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+# ffmpeg/ffprobe power the AI video valuation engine (scene detection, probing).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd -r -u 1001 appuser
 COPY --from=build /app/target/vidvault-api.jar app.jar
 USER appuser

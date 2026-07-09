@@ -1,10 +1,12 @@
 package com.vidvault.api.web;
 
 import com.vidvault.api.domain.User;
+import com.vidvault.api.dto.MarketplaceDtos.ListRequest;
 import com.vidvault.api.dto.OfferBreakdown;
 import com.vidvault.api.dto.VideoResponse;
 import com.vidvault.api.service.PricingService;
 import com.vidvault.api.service.VideoService;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -59,6 +61,17 @@ public class VideoController {
     @PostMapping("/{id}/reject-offer")
     public VideoResponse rejectOffer(@AuthenticationPrincipal User user, @PathVariable UUID id) {
         return videoService.rejectOffer(user, id);
+    }
+
+    @PostMapping("/{id}/list")
+    public VideoResponse listForSale(@AuthenticationPrincipal User user, @PathVariable UUID id,
+                                     @Valid @RequestBody ListRequest req) {
+        return videoService.listForSale(user, id, req.price());
+    }
+
+    @PostMapping("/{id}/unlist")
+    public VideoResponse unlist(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+        return videoService.unlist(user, id);
     }
 
     /** Preview an offer for given parameters before uploading. */

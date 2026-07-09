@@ -63,4 +63,24 @@ public class Video {
 
     @Column(name = "resolved_at")
     private Instant resolvedAt;
+
+    // --- Peer-to-peer marketplace ---
+
+    @Column(name = "listed_for_sale", nullable = false)
+    private boolean listedForSale = false;
+
+    @Column(name = "sale_price", precision = 14, scale = 2)
+    private BigDecimal salePrice;
+
+    @Column(name = "listed_at")
+    private Instant listedAt;
+
+    // --- AI valuation ---
+
+    @Column(name = "ai_fair_price", precision = 14, scale = 2)
+    private BigDecimal aiFairPrice;
+
+    /** JSON serialized {@code AiAnalysis}. */
+    @Column(name = "ai_analysis", columnDefinition = "text")
+    private String aiAnalysis;
 }

@@ -78,6 +78,20 @@ public class StorageService {
         }
     }
 
+    public void uploadFile(String objectKey, java.io.File file, String contentType) {
+        ensureBucket();
+        try (InputStream in = new java.io.FileInputStream(file)) {
+            client.putObject(PutObjectArgs.builder()
+                    .bucket(props.getBucket())
+                    .object(objectKey)
+                    .stream(in, file.length(), -1)
+                    .contentType(contentType != null ? contentType : "video/mp4")
+                    .build());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to store video file: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * Presigned, time-limited URL for downloading/streaming the object. Signed
      * against the public endpoint so the host matches what the browser requests.

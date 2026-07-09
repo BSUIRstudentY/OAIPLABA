@@ -1,6 +1,8 @@
 package com.vidvault.api.dto;
 
 import com.vidvault.api.domain.WalletTransaction;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -10,6 +12,10 @@ import java.util.UUID;
 public final class WalletDtos {
 
     private WalletDtos() {
+    }
+
+    public record AmountRequest(
+            @NotNull @DecimalMin(value = "0.01", message = "Amount must be greater than zero") BigDecimal amount) {
     }
 
     public record TransactionResponse(
