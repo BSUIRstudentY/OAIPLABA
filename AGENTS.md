@@ -38,6 +38,15 @@ Standard commands and URLs are documented in `README.md`; prefer it over duplica
   design — rely on the backend's retry logic rather than adding one.
 - **Frontend production build** is `tsc && vite build` (see `frontend/package.json`).
   It does not use `tsc -b` project references (that conflicted with `noEmit`).
+- **AI valuation needs ffmpeg/ffprobe in the backend container** — they are
+  installed in `backend/Dockerfile` (runtime stage) and power
+  `VideoAnalysisService` (scene detection → key-moment timecodes, probing). If
+  they are missing the engine degrades gracefully to a metadata-only fallback
+  (lower confidence) rather than failing the upload. Analysis runs synchronously
+  during upload and is bounded (probes first ~3 min of video) with timeouts.
+- P2P purchases move funds and transfer ownership in one transaction and set the
+  video's platform-buyout `status` to `REJECTED` for the new owner (so they can't
+  accept a stale platform offer); marketplace/wallet balances can never go negative.
 - Local (non-Docker) dev: backend `cd backend && mvn spring-boot:run` (needs
   Postgres+MinIO reachable); frontend `cd frontend && npm run dev` (Vite proxies
   `/api` to `http://localhost:8080`). Lint: `cd frontend && npm run lint`.
