@@ -35,6 +35,8 @@ public class VideoAnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(VideoAnalysisService.class);
     private static final Pattern PTS_TIME = Pattern.compile("pts_time:([0-9]+\\.?[0-9]*)");
+    /** Maximum share of projected revenue paid for a top-quality video (content score = 1). */
+    private static final double FAIR_SHARE = 0.50;
 
     private final PricingService pricingService;
     private final ObjectMapper objectMapper;
@@ -55,30 +57,43 @@ public class VideoAnalysisService {
         int duration = probe.durationSeconds > 0 ? probe.durationSeconds : Math.max(0, fallbackDurationSeconds);
         List<Double> sceneTimes = detectScenes(file, duration);
 
-        // Monetisation anchor from the same pricing model used for platform offers.
+        // Monetisation anchor from the same pricing model used for platform offers
+        // (realistic ~$0.01 per 1000 views, gated by duration).
         OfferBreakdown breakdown = pricingService.estimate(category, duration, expectedMonthlyViews);
         BigDecimal projectedRevenue = breakdown.projectedRevenue();
 
-        double quality = qualityScore(probe, duration, sceneTimes.size());
-        // Fair share of projected revenue, scaled by quality but capped to stay conservative.
-        double fairShare = clamp(0.30 * quality, 0.15, 0.50);
+        // Content score in [0,1]: how much real, monetisable content the video carries.
+        // Duration gates hard — a few-second clip with no editing is worth ~nothing,
+        // no matter its resolution. Long + edited + with audio + HD approaches 1.0.
+        double durationScore = durationScore(duration);
+        double editingScore = editingScore(sceneTimes.size(), duration);
+        double audioScore = probe.hasAudio ? 1.0 : 0.30;
+        double resolutionScore = resolutionScore(probe);
+        double qualityPart = 0.45 * editingScore + 0.30 * audioScore + 0.25 * resolutionScore;
+        double contentScore = clamp(durationScore * qualityPart, 0.0, 1.0);
+
+        // Pay a fair share of realistic projected revenue, scaled by content value.
         BigDecimal fairPrice = projectedRevenue
-                .multiply(BigDecimal.valueOf(fairShare))
+                .multiply(BigDecimal.valueOf(FAIR_SHARE))
+                .multiply(BigDecimal.valueOf(contentScore))
                 .setScale(2, RoundingMode.HALF_UP);
+
+        String recommendation = recommendation(contentScore, fairPrice, duration);
 
         List<AiAnalysis.KeyMoment> keyMoments = buildKeyMoments(sceneTimes, duration);
         AiAnalysis.Technical technical = new AiAnalysis.Technical(
                 probe.width, probe.height, resolutionLabel(probe.height), round1(probe.fps),
                 probe.bitrateKbps, probe.hasAudio, sceneTimes.size(), duration);
         List<String> contextTags = buildContextTags(category, probe, duration, sceneTimes.size());
-        List<AiAnalysis.Factor> factors = buildFactors(probe, duration, sceneTimes.size(), quality, fairShare, breakdown);
+        List<AiAnalysis.Factor> factors = buildFactors(probe, duration, sceneTimes.size(),
+                durationScore, editingScore, contentScore, breakdown);
         double confidence = confidence(probe, sceneTimes.size());
-        String summary = buildSummary(fairPrice, breakdown, technical, fairShare, quality, keyMoments.size());
+        String summary = buildSummary(fairPrice, breakdown, technical, contentScore, recommendation, keyMoments.size());
         String engine = probe.ok ? "content-analysis v1 (ffprobe + ffmpeg scene detection)"
                 : "heuristic fallback (metadata only)";
 
-        return new AiAnalysis(fairPrice, breakdown.currency(), confidence, summary,
-                factors, keyMoments, contextTags, technical, engine);
+        return new AiAnalysis(fairPrice, breakdown.currency(), confidence, contentScore, recommendation,
+                summary, factors, keyMoments, contextTags, technical, engine);
     }
 
     // ---- Signal extraction ----
@@ -158,29 +173,37 @@ public class VideoAnalysisService {
 
     // ---- Scoring ----
 
-    private double qualityScore(Probe p, int duration, int sceneChanges) {
-        double score = 1.0;
-        if (p.ok) {
-            if (p.height >= 2160) score *= 1.20;
-            else if (p.height >= 1080) score *= 1.15;
-            else if (p.height >= 720) score *= 1.05;
-            else if (p.height >= 480) score *= 0.95;
-            else if (p.height > 0) score *= 0.80;
+    /**
+     * How much the length alone justifies buying. Seconds-long clips score ~0
+     * (not worth buying); value ramps up to a full 1.0 around the 5-minute mark.
+     */
+    private double durationScore(int durationSeconds) {
+        if (durationSeconds < 30) return 0.0;      // too short to have real content
+        return clamp((durationSeconds - 30) / (300.0 - 30.0), 0.0, 1.0);
+    }
 
-            score *= p.hasAudio ? 1.05 : 0.90;
+    /** Editing/montage effort inferred from scene changes. No cuts = raw, single-shot. */
+    private double editingScore(int sceneChanges, int durationSeconds) {
+        if (sceneChanges <= 0) return 0.15;
+        double cutsPerMin = sceneChanges / Math.max(1.0, durationSeconds / 60.0);
+        // Reward evidence of editing, saturating so frantic cutting isn't over-rewarded.
+        return clamp(0.4 + Math.min(cutsPerMin, 6.0) * 0.10, 0.4, 1.0);
+    }
 
-            if (p.fps >= 50) score *= 1.05;
+    private double resolutionScore(Probe p) {
+        if (!p.ok || p.height <= 0) return 0.5;
+        if (p.height >= 1080) return 1.0;
+        if (p.height >= 720) return 0.85;
+        if (p.height >= 480) return 0.60;
+        return 0.40;
+    }
+
+    private String recommendation(double contentScore, BigDecimal fairPrice, int durationSeconds) {
+        if (durationSeconds < 30 || contentScore < 0.15 || fairPrice.doubleValue() < 0.05) {
+            return "Not worth buying";
         }
-        int minutes = duration / 60;
-        if (minutes >= 4 && minutes <= 20) score *= 1.05;
-        else if (duration > 0 && duration < 30) score *= 0.85;
-
-        if (duration > 0) {
-            double cutsPerMin = sceneChanges / Math.max(1.0, duration / 60.0);
-            if (cutsPerMin >= 0.5 && cutsPerMin <= 8) score *= 1.05; // engaging pacing
-            else if (sceneChanges == 0 && p.ok) score *= 0.95;       // static / single shot
-        }
-        return clamp(score, 0.60, 1.30);
+        if (contentScore < 0.5) return "Low value";
+        return "Worth buying";
     }
 
     private double confidence(Probe p, int sceneChanges) {
@@ -233,46 +256,59 @@ public class VideoAnalysisService {
     }
 
     private List<AiAnalysis.Factor> buildFactors(Probe p, int duration, int sceneChanges,
-                                                 double quality, double fairShare, OfferBreakdown b) {
+                                                 double durationScore, double editingScore,
+                                                 double contentScore, OfferBreakdown b) {
         List<AiAnalysis.Factor> f = new ArrayList<>();
-        f.add(new AiAnalysis.Factor("Monetisation potential", "anchor",
-                "Projected %s over %d months of YouTube monetisation is the ceiling for a fair price."
-                        .formatted(money(b.projectedRevenue(), b.currency()), b.projectionMonths())));
+        f.add(new AiAnalysis.Factor("Monetisation ceiling", "anchor",
+                "At ~%s per 1000 views, projected YouTube revenue over %d months is only %s — the ceiling for any fair price."
+                        .formatted(money(b.averageCpm(), b.currency()), b.projectionMonths(),
+                                money(b.projectedRevenue(), b.currency()))));
+        int minutes = duration / 60;
+        f.add(new AiAnalysis.Factor("Length", durationScore >= 0.8 ? "+" : durationScore < 0.2 ? "-" : "=",
+                duration < 30
+                        ? "%d:%02d — far too short to carry real content or ads; almost no monetisation value."
+                                .formatted(duration / 60, duration % 60)
+                        : "%d:%02d runtime%s.".formatted(duration / 60, duration % 60,
+                                minutes >= 4 && minutes <= 20 ? " — in the ad-friendly sweet spot" : "")));
+        f.add(new AiAnalysis.Factor("Editing / montage", sceneChanges > 0 ? "+" : "-",
+                sceneChanges == 0
+                        ? "No scene changes detected — looks like a single raw shot with little editing effort."
+                        : "%d scene change(s) — evidence of editing/montage (and the key-moment timecodes)."
+                                .formatted(sceneChanges)));
         if (p.ok) {
+            f.add(new AiAnalysis.Factor("Audio", p.hasAudio ? "+" : "-",
+                    p.hasAudio ? "Has an audio track — needed to hold an audience." : "No audio — poor for viewer retention."));
             f.add(new AiAnalysis.Factor("Resolution", p.height >= 1080 ? "+" : p.height < 480 ? "-" : "=",
                     "%s source (%dx%d).".formatted(resolutionLabel(p.height), p.width, p.height)));
-            f.add(new AiAnalysis.Factor("Audio", p.hasAudio ? "+" : "-",
-                    p.hasAudio ? "Has an audio track — better for monetisation." : "No audio track detected."));
         } else {
             f.add(new AiAnalysis.Factor("Content probe", "-",
                     "Could not decode the media; valued from metadata only, so confidence is lower."));
         }
-        int minutes = duration / 60;
-        f.add(new AiAnalysis.Factor("Length", minutes >= 4 && minutes <= 20 ? "+" : duration < 30 ? "-" : "=",
-                "%d:%02d runtime.".formatted(duration / 60, duration % 60)
-                        + (minutes >= 4 && minutes <= 20 ? " In the ad-friendly sweet spot." : "")));
-        f.add(new AiAnalysis.Factor("Pacing & structure", sceneChanges > 0 ? "+" : "=",
-                sceneChanges + " scene change(s) detected — used for engagement and key-moment timecodes."));
-        f.add(new AiAnalysis.Factor("Quality multiplier", quality >= 1.0 ? "+" : "-",
-                "Overall quality factor x%.2f, so the fair price is %.0f%% of projected revenue (kept conservative)."
-                        .formatted(quality, fairShare * 100)));
+        f.add(new AiAnalysis.Factor("Content score", contentScore >= 0.5 ? "+" : "-",
+                "Overall content value %.0f%% (length x editing/audio/quality). Fair price = %.0f%% of projected revenue x this score."
+                        .formatted(contentScore * 100, FAIR_SHARE * 100)));
         return f;
     }
 
     private String buildSummary(BigDecimal fairPrice, OfferBreakdown b, AiAnalysis.Technical t,
-                                double fairShare, double quality, int keyMomentCount) {
-        return ("AI fair value: %s. This %s clip runs %d:%02d%s with %d key moment(s) identified. "
-                + "The engine anchors on the projected %s of monetisation revenue and applies a quality "
-                + "factor of x%.2f, pricing it at a conservative %.0f%% of that projection to avoid over-paying.")
+                                double contentScore, String recommendation, int keyMomentCount) {
+        String verdict;
+        if (t.durationSeconds() < 30) {
+            verdict = "This clip is only %d:%02d long — too short to carry real content, so it is essentially not worth buying."
+                    .formatted(t.durationSeconds() / 60, t.durationSeconds() % 60);
+        } else if (contentScore < 0.5) {
+            verdict = "Limited content value (%.0f%%): short and/or lightly edited, so realistic YouTube earnings are low."
+                    .formatted(contentScore * 100);
+        } else {
+            verdict = "Solid content value (%.0f%%): long enough, edited, and watchable — worth buying based on realistic earnings."
+                    .formatted(contentScore * 100);
+        }
+        return ("AI fair value: %s (%s). %s The engine assumes ~%s per 1000 views, so projected revenue over %d months is %s; "
+                + "it pays at most %.0f%% of that, scaled by content value. %d key moment(s) identified.")
                 .formatted(
-                        money(fairPrice, b.currency()),
-                        t.resolutionLabel(),
-                        t.durationSeconds() / 60, t.durationSeconds() % 60,
-                        t.hasAudio() ? " with audio" : "",
-                        keyMomentCount,
-                        money(b.projectedRevenue(), b.currency()),
-                        quality,
-                        fairShare * 100);
+                        money(fairPrice, b.currency()), recommendation, verdict,
+                        money(b.averageCpm(), b.currency()), b.projectionMonths(),
+                        money(b.projectedRevenue(), b.currency()), FAIR_SHARE * 100, keyMomentCount);
     }
 
     // ---- helpers ----

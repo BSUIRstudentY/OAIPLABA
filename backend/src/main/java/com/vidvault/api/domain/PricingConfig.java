@@ -19,13 +19,16 @@ public class PricingConfig {
     @Id
     private Integer id = 1;
 
-    /** Average CPM (revenue per 1000 monetised views), in USD. */
+    /**
+     * Realised revenue per 1000 views, in USD. Creators earn on average about
+     * 1 cent per 1000 views, so the default is 0.01.
+     */
     @Column(name = "average_cpm", nullable = false, precision = 8, scale = 2)
-    private BigDecimal averageCpm = new BigDecimal("2.50");
+    private BigDecimal averageCpm = new BigDecimal("0.01");
 
     /** Fraction of monetisable playbacks (watch-time / retention factor), 0..1. */
     @Column(name = "watch_time_factor", nullable = false, precision = 5, scale = 4)
-    private BigDecimal watchTimeFactor = new BigDecimal("0.55");
+    private BigDecimal watchTimeFactor = new BigDecimal("1.0000");
 
     /** Number of months of projected revenue the platform pays for. */
     @Column(name = "projection_months", nullable = false)

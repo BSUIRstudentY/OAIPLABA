@@ -57,24 +57,24 @@ public class PricingService {
     }
 
     /**
-     * Videos between 4 and 20 minutes earn a small watch-time bonus (they can
-     * carry more mid-roll ads); very short or very long videos are discounted.
+     * Duration strongly gates how many monetisable views a video can attract.
+     * Very short clips (a few seconds) realistically earn almost nothing, so
+     * they are gated close to zero; ad-friendly 4-20 minute videos reach the
+     * full estimate. This prevents over-valuing short, low-effort uploads.
      */
-    private BigDecimal durationFactor(int durationSeconds) {
-        int minutes = Math.max(0, durationSeconds) / 60;
-        if (minutes >= 4 && minutes <= 20) {
-            return new BigDecimal("1.10");
-        }
-        if (minutes < 1) {
-            return new BigDecimal("0.70");
-        }
-        return BigDecimal.ONE;
+    public static double durationViewFactor(int durationSeconds) {
+        int s = Math.max(0, durationSeconds);
+        if (s < 30) return 0.02;      // seconds-long clip: effectively worthless
+        if (s < 60) return 0.10;      // < 1 min
+        if (s < 240) return 0.50;     // 1-4 min
+        if (s <= 1200) return 1.00;   // 4-20 min sweet spot
+        return 0.85;                  // very long
     }
 
     public OfferBreakdown estimate(String category, int durationSeconds, Long providedExpectedViews) {
         PricingConfig cfg = currentConfig();
         BigDecimal categoryMultiplier = categoryMultiplier(category);
-        BigDecimal durationFactor = durationFactor(durationSeconds);
+        BigDecimal durationFactor = BigDecimal.valueOf(durationViewFactor(durationSeconds));
 
         long estimatedMonthlyViews;
         if (providedExpectedViews != null && providedExpectedViews > 0) {
@@ -105,9 +105,14 @@ public class PricingService {
                 .multiply(BigDecimal.ONE.subtract(cfg.getPlatformFee()))
                 .setScale(2, RoundingMode.HALF_UP);
 
+        String viewsExplain = (providedExpectedViews != null && providedExpectedViews > 0)
+                ? "Estimated monthly views = %d (provided by uploader)".formatted(estimatedMonthlyViews)
+                : "Estimated monthly views = %d (base %d x category %s x duration gate %.2f)"
+                        .formatted(estimatedMonthlyViews, cfg.getBaseMonthlyViews(), categoryMultiplier,
+                                durationViewFactor(durationSeconds));
         List<String> steps = List.of(
-                "Estimated monthly views = %d".formatted(estimatedMonthlyViews),
-                "Monthly revenue = views x CPM / 1000 x watch-time = %s".formatted(monthlyRevenue),
+                viewsExplain,
+                "Monthly revenue = views x %s per 1000 views = %s".formatted(cfg.getAverageCpm(), monthlyRevenue),
                 "Projected revenue over %d months = %s".formatted(cfg.getProjectionMonths(), projectedRevenue),
                 "Gross offer = projected x buyout share (%s) = %s".formatted(cfg.getBuyoutShare(), grossOffer),
                 "Offer price = gross x (1 - platform fee %s) = %s %s"

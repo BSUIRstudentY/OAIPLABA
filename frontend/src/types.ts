@@ -60,6 +60,8 @@ export interface AiAnalysis {
   fairPrice: number;
   currency: string;
   confidence: number;
+  contentScore: number;
+  recommendation: string;
   summary: string;
   factors: { name: string; impact: string; detail: string }[];
   keyMoments: { timeSeconds: number; timecode: string; label: string }[];

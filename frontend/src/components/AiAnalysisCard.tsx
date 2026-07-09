@@ -9,6 +9,12 @@ function ImpactIcon({ impact }: { impact: string }) {
   return <Equal size={14} className="text-muted-foreground" aria-label="neutral factor" />;
 }
 
+function recommendationClass(rec: string): string {
+  if (rec === 'Worth buying') return 'bg-success/20 text-success';
+  if (rec === 'Low value') return 'bg-primary/20 text-primary';
+  return 'bg-destructive/20 text-destructive';
+}
+
 export default function AiAnalysisCard({ analysis }: { analysis: AiAnalysis }) {
   const t = analysis.technical;
   return (
@@ -30,6 +36,11 @@ export default function AiAnalysisCard({ analysis }: { analysis: AiAnalysis }) {
             <div className="font-mono text-4xl font-bold text-accent">
               {formatMoney(analysis.fairPrice, analysis.currency)}
             </div>
+            {analysis.recommendation && (
+              <span className={`badge mt-2 ${recommendationClass(analysis.recommendation)}`}>
+                {analysis.recommendation}
+              </span>
+            )}
           </div>
           <div className="text-right text-xs text-muted-foreground">
             {t.resolutionLabel} · {t.hasAudio ? 'audio' : 'silent'}
@@ -38,6 +49,18 @@ export default function AiAnalysisCard({ analysis }: { analysis: AiAnalysis }) {
             {t.sceneChanges > 0 && ` · ${t.sceneChanges} cuts`}
           </div>
         </div>
+
+        {typeof analysis.contentScore === 'number' && (
+          <div className="mt-4">
+            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+              <span>Content value</span>
+              <span className="font-mono">{Math.round(analysis.contentScore * 100)}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full bg-accent transition-all" style={{ width: `${Math.round(analysis.contentScore * 100)}%` }} />
+            </div>
+          </div>
+        )}
 
         <p className="mt-4 text-sm text-muted-foreground">{analysis.summary}</p>
 

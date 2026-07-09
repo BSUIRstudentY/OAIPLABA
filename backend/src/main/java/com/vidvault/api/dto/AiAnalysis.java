@@ -13,6 +13,10 @@ public record AiAnalysis(
         String currency,
         /** 0..1 — how confident the engine is, based on how much real signal it could extract. */
         double confidence,
+        /** 0..1 — how much real, monetisable content the video carries (length, editing, audio, quality). */
+        double contentScore,
+        /** Short verdict, e.g. "Not worth buying" / "Low value" / "Worth buying". */
+        String recommendation,
         String summary,
         List<Factor> factors,
         List<KeyMoment> keyMoments,
