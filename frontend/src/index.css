@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(60rem 60rem at 110% -10%, rgba(236, 72, 153, 0.14), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 10%, rgba(37, 99, 235, 0.14), transparent 55%);
+    background-attachment: fixed;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, .font-display {
+    @apply font-mono;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold
+           transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-primary-foreground hover:bg-secondary hover:shadow-glow;
+  }
+  .btn-accent {
+    @apply btn bg-accent text-white hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply btn bg-white/5 text-foreground hover:bg-white/10 border border-border;
+  }
+  .btn-danger {
+    @apply btn bg-destructive text-white hover:brightness-110;
+  }
+  .card {
+    @apply rounded-2xl border border-border bg-surface/80 shadow-card backdrop-blur;
+  }
+  .input {
+    @apply w-full rounded-xl border border-border bg-background/60 px-4 py-2.5 text-sm text-foreground
+           placeholder:text-muted-foreground transition-colors focus:border-primary;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-muted-foreground;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+}
