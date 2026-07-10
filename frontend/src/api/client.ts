@@ -71,7 +71,24 @@ api.interceptors.response.use(
 
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
   if (axios.isAxiosError(error)) {
-    return error.response?.data?.message || error.message || fallback;
+    const data = error.response?.data;
+    if (data) {
+      // The API returns a JSON body { message, ... }. Depending on the adapter,
+      // axios may hand it to us already parsed (object) or as a raw string.
+      if (typeof data === 'object' && typeof (data as { message?: unknown }).message === 'string') {
+        return (data as { message: string }).message;
+      }
+      if (typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed && typeof parsed.message === 'string') return parsed.message;
+        } catch {
+          /* not JSON — fall through */
+        }
+        if (data.trim()) return data;
+      }
+    }
+    return error.message || fallback;
   }
   return fallback;
 }
