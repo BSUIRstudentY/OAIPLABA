@@ -44,6 +44,9 @@ Standard commands and URLs are documented in `README.md`; prefer it over duplica
   they are missing the engine degrades gracefully to a metadata-only fallback
   (lower confidence) rather than failing the upload. Analysis runs synchronously
   during upload and is bounded (probes first ~3 min of video) with timeouts.
+- Uploads are globally de-duplicated by a SHA-256 `content_hash` (unique index on
+  `videos`). Re-uploading the exact same file returns HTTP 409 — expected when
+  testing with a fixed sample file; use a fresh/unique file for repeat upload tests.
 - P2P purchases move funds and transfer ownership in one transaction and set the
   video's platform-buyout `status` to `REJECTED` for the new owner (so they can't
   accept a stale platform offer); marketplace/wallet balances can never go negative.

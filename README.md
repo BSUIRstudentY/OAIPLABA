@@ -37,6 +37,7 @@ A default admin account is seeded: **admin@vidvault.io** / **admin12345**.
 
 - **Auth:** register / login / refresh, roles USER & ADMIN, seeded admin.
 - **Upload & platform buyout:** upload a video; the platform makes an instant buyout offer from projected YouTube monetisation; accept to get paid.
+- **Duplicate protection:** each upload is hashed (SHA-256); the same video content can only be uploaded once (globally), returning a clear error on re-upload.
 - **AI valuation engine:** on upload the backend runs ffprobe + ffmpeg scene detection on the actual file to extract real signals (resolution, fps, bitrate, audio, scene changes) and produces a **fair, deliberately conservative price** plus a rationale ("why this price"), context tags, and **key-moment timecodes**. It anchors on projected revenue and never over-values a clip.
 - **Peer-to-peer marketplace:** owners list videos for sale at their own price; other users browse and buy. Buying transfers ownership and moves funds between wallets atomically.
 - **Wallet:** simulated deposit and withdrawal (prototype, no real acquiring), with a full signed transaction history (deposit, buyout, sale, purchase, withdrawal).
