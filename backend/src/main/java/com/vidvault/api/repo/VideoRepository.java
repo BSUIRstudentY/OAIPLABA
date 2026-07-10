@@ -10,4 +10,6 @@ public interface VideoRepository extends JpaRepository<Video, UUID> {
     List<Video> findByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
 
     List<Video> findByListedForSaleTrueOrderByListedAtDesc();
+
+    boolean existsByContentHash(String contentHash);
 }

@@ -67,6 +67,14 @@ public class VideoService {
         try {
             temp = File.createTempFile("vidvault-", suffix(file.getOriginalFilename()));
             file.transferTo(temp);
+
+            // Reject duplicate uploads: the same file content may only exist once.
+            String contentHash = sha256(temp);
+            if (videoRepository.existsByContentHash(contentHash)) {
+                throw ApiException.conflict(
+                        "This exact video has already been uploaded and cannot be uploaded again");
+            }
+
             // AI valuation from the actual media content.
             analysis = analysisService.analyze(temp, cat, durationSeconds, expectedMonthlyViews);
 
@@ -86,13 +94,21 @@ public class VideoService {
             video.setSizeBytes(file.getSize());
             video.setContentType(contentType);
             video.setObjectKey(objectKey);
+            video.setContentHash(contentHash);
             video.setStatus(VideoStatus.OFFERED);
             video.setEstimatedMonthlyViews(breakdown.estimatedMonthlyViews());
             video.setOfferPrice(breakdown.offerPrice());
             video.setOfferBreakdown(toJson(breakdown));
             video.setAiFairPrice(analysis.fairPrice());
             video.setAiAnalysis(toJson(analysis));
-            videoRepository.save(video);
+            try {
+                videoRepository.saveAndFlush(video);
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // Lost a race with a concurrent identical upload; clean up the stored object.
+                storageService.deleteQuietly(objectKey);
+                throw ApiException.conflict(
+                        "This exact video has already been uploaded and cannot be uploaded again");
+            }
             return VideoResponse.from(video);
         } catch (java.io.IOException e) {
             throw new RuntimeException("Failed to process upload: " + e.getMessage(), e);
@@ -100,6 +116,27 @@ public class VideoService {
             if (temp != null && !temp.delete()) {
                 temp.deleteOnExit();
             }
+        }
+    }
+
+    private String sha256(File file) throws java.io.IOException {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            try (java.io.InputStream in = new java.io.FileInputStream(file)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    md.update(buffer, 0, read);
+                }
+            }
+            StringBuilder sb = new StringBuilder(64);
+            for (byte b : md.digest()) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+                sb.append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 

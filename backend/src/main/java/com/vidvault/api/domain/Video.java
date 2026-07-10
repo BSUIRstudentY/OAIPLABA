@@ -44,6 +44,10 @@ public class Video {
     @Column(name = "object_key", nullable = false)
     private String objectKey;
 
+    /** SHA-256 of the file content, used to reject duplicate uploads. */
+    @Column(name = "content_hash", length = 64)
+    private String contentHash;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private VideoStatus status = VideoStatus.OFFERED;
